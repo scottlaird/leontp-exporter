@@ -1,17 +1,16 @@
 package main
 
 import (
-	"fmt"
-	"flag"
-	"time"
-	"net"
 	"encoding/binary"
+	"flag"
+	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-
 )
 
 var (
@@ -19,29 +18,28 @@ var (
 )
 
 type LeoNTPStatus struct {
-	RefTS0, RefTS1,	Uptime, NTPRequests, LockTime, Firmware uint32
-	Flags uint8
-	Satellites uint8
-	SerialNumber uint16
-	TimeStamp time.Time
+	RefTS0, RefTS1, Uptime, NTPRequests, LockTime, Firmware uint32
+	Flags                                                   uint8
+	Satellites                                              uint8
+	SerialNumber                                            uint16
+	TimeStamp                                               time.Time
 }
 
-
 type LeoNTPCollector struct {
-	hostname string
-	Uptime *prometheus.Desc
+	hostname    string
+	Uptime      *prometheus.Desc
 	NTPRequests *prometheus.Desc
-	LockTime *prometheus.Desc
-	Satellites *prometheus.Desc
+	LockTime    *prometheus.Desc
+	Satellites  *prometheus.Desc
 }
 
 func NewLeoNTPCollector(hostname string) *LeoNTPCollector {
 	return &LeoNTPCollector{
-		hostname: hostname,
-		Uptime: prometheus.NewDesc("leontp_uptime_seconds", "Number of seconds this device has been running since its last reboot", nil, nil),
+		hostname:    hostname,
+		Uptime:      prometheus.NewDesc("leontp_uptime_seconds", "Number of seconds this device has been running since its last reboot", nil, nil),
 		NTPRequests: prometheus.NewDesc("leontp_ntp_request_count", "Number of NTP requests since the device's last reboot", nil, nil),
-		LockTime: prometheus.NewDesc("leontp_lock_time_seconds", "Number of seconds that this device has been locked to GPS", nil, nil),
-		Satellites: prometheus.NewDesc("leontp_satellites_count", "Current number of visible satellites", nil, nil),
+		LockTime:    prometheus.NewDesc("leontp_lock_time_seconds", "Number of seconds that this device has been locked to GPS", nil, nil),
+		Satellites:  prometheus.NewDesc("leontp_satellites_count", "Current number of visible satellites", nil, nil),
 	}
 }
 
@@ -67,21 +65,18 @@ func (c *LeoNTPCollector) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(c.Satellites, prometheus.GaugeValue, float64(status.Satellites))
 }
 
-
-
-
 // Attempt at a quick port of
 // https://github.com/sean-foley/leo-ntp-monitor/blob/main/leo-ntp-monitor.py,
 // but for Prometheus instead of Influxdb.
 func GetNTPMetrics(hostPort string, timeout time.Duration) (LeoNTPStatus, error) {
-	sendBuffer := []byte{4<<3+7, 0, 0x10, 1, 0, 0, 0, 0, 0}
+	sendBuffer := []byte{4<<3 + 7, 0, 0x10, 1, 0, 0, 0, 0, 0}
 	result := LeoNTPStatus{}
 
 	addr, err := net.ResolveUDPAddr("udp", hostPort)
 	if err != nil {
 		return result, fmt.Errorf("Unable to resolve hostname: %v", err)
 	}
-	
+
 	conn, err := net.DialUDP("udp", nil, addr)
 	if err != nil {
 		return result, fmt.Errorf("Unable to connect: %v", err)
@@ -94,7 +89,7 @@ func GetNTPMetrics(hostPort string, timeout time.Duration) (LeoNTPStatus, error)
 		return result, fmt.Errorf("Unable to send: %v", err)
 	}
 
-	b := make([]byte, 1024)  // Grossly oversized, but whatever.
+	b := make([]byte, 1024) // Grossly oversized, but whatever.
 	_, err = conn.Read(b)
 	if err != nil {
 		return result, fmt.Errorf("Unable to read: %v", err)
@@ -110,16 +105,15 @@ func GetNTPMetrics(hostPort string, timeout time.Duration) (LeoNTPStatus, error)
 	result.SerialNumber = binary.LittleEndian.Uint16(b[42:])
 	result.Firmware = binary.LittleEndian.Uint32(b[44:])
 
-	result.TimeStamp =  ParseNTPTime(result.RefTS1, result.RefTS0)
+	result.TimeStamp = ParseNTPTime(result.RefTS1, result.RefTS0)
 
-	return result, nil	
+	return result, nil
 }
-
 
 // Convert uint32 seconds-since-1900 and fractional seconds into a time.Time
 func ParseNTPTime(ts1, ts0 uint32) time.Time {
-	secs := int64(ts1 - 2208988800) // Convert from Jan 1, 1900 to Jan 1, 1970.
-	nsecs := int64(float64(ts0) / (1<<32) * 1e9) // Convert from a fraction of a second to nanoseconds. 
+	secs := int64(ts1 - 2208988800)                // Convert from Jan 1, 1900 to Jan 1, 1970.
+	nsecs := int64(float64(ts0) / (1 << 32) * 1e9) // Convert from a fraction of a second to nanoseconds.
 	return time.Unix(secs, nsecs)
 }
 
@@ -146,7 +140,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	leoNTPHandler := promhttp.HandlerFor(
 		reg,
 		promhttp.HandlerOpts{
-			ErrorHandling:       promhttp.ContinueOnError,
+			ErrorHandling: promhttp.ContinueOnError,
 		},
 	)
 	leoNTPHandler.ServeHTTP(w, r)
